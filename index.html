@@ -8,8 +8,8 @@
 <meta name="theme-color" content="#ffffff">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ff5a3c'/%3E%3Ccircle cx='32' cy='27' r='11' fill='none' stroke='%23fff' stroke-width='5'/%3E%3Cpath d='M32 54 L20 36 H44 Z' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<script>window.APP_VER="20261007a";</script>
-<link rel="stylesheet" href="styles.css?v=20261007a">
+<script>window.APP_VER="20261007b";</script>
+<link rel="stylesheet" href="styles.css?v=20261007b">
 </head>
 <body>
 
@@ -109,6 +109,11 @@
         <input id="searchInput" class="search" placeholder="식당 이름 검색" type="search" list="searchList" autocomplete="off">
         <datalist id="searchList"></datalist>
       </div>
+      <div id="searchKind" class="segment hidden" role="tablist">
+        <button data-kind="food" class="active"><span>맛집</span><em id="segFoodN"></em></button>
+        <button data-kind="cafe"><span>카페</span><em id="segCafeN"></em></button>
+        <i class="thumb"></i>
+      </div>
       <div id="searchMapBox" class="search-map hidden"><div id="searchMap"></div><div class="map-legend" id="searchLegend"></div></div>
       <p class="muted pad" id="searchHint">검색어를 입력하세요.</p>
       <ol id="searchResults" class="rank-list"></ol>
@@ -186,9 +191,9 @@
   <div id="toast" class="toast"></div>
 </div>
 
-<script src="config.js?v=20261007a"></script>
+<script src="config.js?v=20261007b"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script id="kakaoSdk"></script>
-<script src="app.js?v=20261007a"></script>
+<script src="app.js?v=20261007b"></script>
 </body>
 </html>

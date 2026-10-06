@@ -125,6 +125,15 @@ label input:focus{outline:0;border-color:var(--ink);background:var(--surface);bo
 .pin.cafe .lbl{color:var(--cafe)}.pin.cafe .lbl b{color:var(--cafe)}
 
 /* ---------- 검색 ---------- */
+.segment{position:relative;display:grid;grid-template-columns:1fr 1fr;margin:2px 14px 12px;padding:4px;background:var(--surface-2);border-radius:14px;isolation:isolate}
+.segment button{position:relative;z-index:1;border:0;background:transparent;padding:10px 12px;border-radius:11px;font-weight:600;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;transition:color .2s}
+.segment button em{font-style:normal;font-size:11.5px;font-weight:700;background:rgba(0,0,0,.06);color:inherit;border-radius:999px;padding:1px 7px;min-width:22px}
+.segment button.active{color:var(--fg)}
+.segment button.active em{background:var(--accent);color:#fff}
+.segment .thumb{position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);background:var(--surface);border-radius:11px;box-shadow:0 1px 3px rgba(0,0,0,.12);transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.segment:has(button[data-kind="cafe"].active) .thumb{transform:translateX(100%)}
+@media (min-width:1024px){.segment{max-width:360px}}
+
 .search-map{position:relative;height:300px;margin:0 14px 12px;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);background:var(--surface-2)}
 #searchMap{position:absolute;inset:0}
 .search-map .map-legend{bottom:10px;left:10px}

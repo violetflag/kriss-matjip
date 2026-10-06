@@ -11,7 +11,7 @@ const S = {            // 앱 상태
   sb: null, user: null, profile: null, favs: new Set(),
   view: "rank-food", cat: "전체", q: "", shown: 60,
   map: null, overlays: [], mapKind: "food", miniMap: null, miniMarker: null,
-  smap: null, soverlays: [], searchMode: "place", searchQ: "", searchList: [], searchCount: null,
+  smap: null, soverlays: [], searchMode: "place", searchQ: "", searchList: [], searchCount: null, searchKind: "food", searchAll: [],
   groups: [], people: [], visits: null, visitsLoading: false,
   detail: null, lastRandom: null, kakaoReady: false,
 };
@@ -149,8 +149,9 @@ function bindApp() {
   $("#searchBox").addEventListener("input", (e) => { S.q = e.target.value.trim(); S.shown = 60; renderRank(); });
   $$("#searchModes .chip").forEach(b => b.onclick = () => {
     if (b.dataset.mode !== "place" && !canSee()) { toast(S.profile ? "관리자 승인 후 사용할 수 있습니다." : "소속·이름 검색은 로그인 후 사용할 수 있습니다."); return; }
-    S.searchMode = b.dataset.mode; $$("#searchModes .chip").forEach(x => x.classList.toggle("active", x === b)); setupSearchInput(); runSearch(); });
+    S.searchMode = b.dataset.mode; S.searchKind = "food"; $$("#searchModes .chip").forEach(x => x.classList.toggle("active", x === b)); setupSearchInput(); runSearch(); });
   let st; $("#searchInput").addEventListener("input", (e) => { S.searchQ = e.target.value.trim(); clearTimeout(st); st = setTimeout(runSearch, 200); });
+  $$("#searchKind button").forEach(b => b.onclick = () => { S.searchKind = b.dataset.kind; runSearch(); });
   $("#detailClose").onclick = closeDetail;
   $("#dHeart").onclick = () => S.detail && toggleFav(S.detail.id);
   $("#moreGroups").onclick = () => showMore("groups"); $("#morePeople").onclick = () => showMore("people");
@@ -352,6 +353,7 @@ function setupSearchInput() {
 function runSearch() {
   const q = S.searchQ, mode = S.searchMode, res = $("#searchResults"), hint = $("#searchHint"), box = $("#searchMapBox");
   res.innerHTML = ""; S.searchList = []; S.searchCount = null;
+  $("#searchKind").classList.add("hidden");
   if (!q) { hint.textContent = { place: "식당이나 카페 이름을 입력하세요.", group: "소속을 입력하면 그 소속이 자주 간 식당·카페 순서로 나옵니다.", person: "이름을 입력하면 그 사람이 자주 간 식당·카페 순서로 나옵니다." }[mode]; box.classList.add("hidden"); return; }
   if (mode === "place") {
     const ql = q.toLowerCase();
@@ -363,17 +365,26 @@ function runSearch() {
   const match = mode === "group" ? (v => exact ? v.g === q : v.g.includes(q)) : (v => exact ? v.p.includes(q) : v.p.some(n => n.includes(q)));
   const cnt = new Map();
   for (const p of S.places) { let c = 0; for (const v of p.visits) if (match(v)) c++; if (c) cnt.set(p.id, c); }
-  const list = [...cnt.entries()].map(([id, c]) => S.byId.get(id)).sort((a, b) => cnt.get(b.id) - cnt.get(a.id));
-  S.searchList = list; S.searchCount = cnt;
-  const total = [...cnt.values()].reduce((a, b) => a + b, 0);
-  if (!list.length) { hint.textContent = "검색 결과가 없습니다."; box.classList.add("hidden"); return; }
-  hint.innerHTML = `<b>${esc(q)}</b>${exact ? "" : " (부분 일치)"} · 방문 <b>${total}</b>회 · 식당·카페 <b>${list.length}</b>곳`;
+  const all = [...cnt.entries()].map(([id, c]) => S.byId.get(id)).sort((a, b) => cnt.get(b.id) - cnt.get(a.id));
+  S.searchAll = all; S.searchCount = cnt;
+  if (!all.length) { hint.textContent = "검색 결과가 없습니다."; box.classList.add("hidden"); $("#searchKind").classList.add("hidden"); return; }
+  const food = all.filter(p => p.cat !== "카페"), cafe = all.filter(p => p.cat === "카페");
+  const sum = (l) => l.reduce((s, p) => s + cnt.get(p.id), 0);
+  const seg = $("#searchKind"); seg.classList.remove("hidden");
+  $("#segFoodN").textContent = food.length; $("#segCafeN").textContent = cafe.length;
+  $$("#searchKind button").forEach(b => b.classList.toggle("active", b.dataset.kind === S.searchKind));
+  const list = S.searchKind === "cafe" ? cafe : food;
+  S.searchList = list;
+  const label = S.searchKind === "cafe" ? "카페" : "식당";
+  hint.innerHTML = `<b>${esc(q)}</b>${exact ? "" : " (부분 일치)"} · ${label} <b>${list.length}</b>곳 · 방문 <b>${sum(list)}</b>회`;
   box.classList.remove("hidden");
-  res.innerHTML = list.slice(0, 150).map((p, i) => rankItem(p, i + 1, cnt.get(p.id), "회 방문")).join(""); bindList(res);
+  res.innerHTML = list.length ? list.slice(0, 150).map((p, i) => rankItem(p, i + 1, cnt.get(p.id), "회 방문")).join("") : `<li class="muted pad">이 검색어로 방문한 ${label}이 없습니다.</li>`;
+  bindList(res);
   renderSearchMap();
 }
 function renderSearchMap() {
-  if (!S.kakaoReady || !S.searchList.length || S.view !== "search") return;
+  if (!S.kakaoReady || S.view !== "search") return;
+  if (!S.searchList.length) { drawSearchOverlays(); return; }
   const el = $("#searchMap");
   if (!S.smap) {
     S.smap = new kakao.maps.Map(el, { center: new kakao.maps.LatLng(...S.data.meta.center), level: 5 });
