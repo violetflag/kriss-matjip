@@ -31,7 +31,7 @@ const countBy = (arr) => { const m = new Map(); for (const k of arr) m.set(k, (m
 /* ---------- 초기화 ---------- */
 async function init() {
   try { S.sb = window.supabase.createClient(C.SUPABASE_URL, C.SUPABASE_ANON); } catch (e) { console.warn("supabase init 실패", e); }
-  const res = await fetch("data.json"); S.data = await res.json();
+  const res = await fetch("data.json?v=" + (window.APP_VER || "1")); S.data = await res.json();
   S.places = S.data.places; S.places.forEach(p => S.byId.set(p.id, p));
   S.places.forEach(p => p.visits = []);
   $("#dataInfo").textContent = `데이터 ${S.data.meta.from} ~ ${S.data.meta.to} · 업체 ${S.data.meta.places.toLocaleString()} · 방문 ${S.data.meta.visits.toLocaleString()}건`;
