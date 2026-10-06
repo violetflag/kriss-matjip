@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KRISS 맛집로드</title>
+<meta name="description" content="2026 KRISS 인들의 맛집과 카페">
+<meta name="theme-color" content="#0b3d6e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b3d6e'/%3E%3Ccircle cx='32' cy='27' r='11' fill='none' stroke='%23fff' stroke-width='5'/%3E%3Cpath d='M32 54 L20 36 H44 Z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- 접속 게이트 -->
+<section id="gate" class="screen">
+  <div class="gate-card">
+    <div class="brand"><span class="logo"></span><h1>KRISS 맛집로드</h1></div>
+    <p class="muted">2026 KRISS 인들의 맛집과 카페</p>
+    <form id="gateForm" autocomplete="off">
+      <label>접속 비밀번호<input type="password" id="gatePw" required autofocus></label>
+      <button class="btn primary" type="submit">입장</button>
+      <p class="err" id="gateErr"></p>
+    </form>
+  </div>
+</section>
+
+<!-- 로그인 / 회원가입 -->
+<section id="auth" class="screen hidden">
+  <div class="gate-card">
+    <div class="brand"><span class="logo"></span><h1>KRISS 맛집로드</h1></div>
+    <div class="tabs" id="authTabs">
+      <button class="tab active" data-tab="login">로그인</button>
+      <button class="tab" data-tab="signup">회원가입</button>
+    </div>
+    <form id="loginForm" autocomplete="on">
+      <label>아이디<input id="loginId" required autocomplete="username"></label>
+      <label>비밀번호<input id="loginPw" type="password" required autocomplete="current-password"></label>
+      <button class="btn primary" type="submit">로그인</button>
+      <p class="err" id="loginErr"></p>
+    </form>
+    <form id="signupForm" class="hidden" autocomplete="off">
+      <label>아이디 <small class="muted">영문·숫자 3~20자</small><input id="signupId" required pattern="[A-Za-z0-9_]{3,20}"></label>
+      <label>비밀번호 <small class="muted">6자 이상</small><input id="signupPw" type="password" required minlength="6"></label>
+      <button class="btn primary" type="submit">가입 신청</button>
+      <p class="muted small">가입 후 관리자 승인을 받아야 전체 기능을 쓸 수 있습니다.</p>
+      <p class="err" id="signupErr"></p>
+    </form>
+    <button class="btn ghost" id="guestBtn">로그인 없이 둘러보기</button>
+    <p class="muted small">즐겨찾기는 로그인 후 사용할 수 있습니다.</p>
+  </div>
+</section>
+
+<!-- 앱 -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <button class="icon-btn" id="menuBtn" aria-label="메뉴">☰</button>
+    <h1 class="title" id="pageTitle">KRISS 맛집로드</h1>
+    <button class="icon-btn user" id="userBtn" aria-label="계정"></button>
+  </header>
+
+  <nav id="sidebar" class="sidebar">
+    <div class="side-head">
+      <div class="brand small"><span class="logo"></span><strong>KRISS 맛집로드</strong></div>
+      <button class="icon-btn" id="closeSide" aria-label="닫기">✕</button>
+    </div>
+    <ul class="menu">
+      <li><button data-view="search">🔍 검색</button></li>
+      <li><button data-view="rank-food">🍽 맛집랭킹</button></li>
+      <li><button data-view="map-food">🗺 맛집지도</button></li>
+      <li><button data-view="rank-cafe">☕ 카페랭킹</button></li>
+      <li><button data-view="map-cafe">📍 카페지도</button></li>
+      <li><button data-view="fav">♥ 즐겨찾기</button></li>
+      <li><button data-view="random">🎲 랜덤 맛집</button></li>
+      <li class="admin-only hidden"><button data-view="admin">⚙ 관리자</button></li>
+    </ul>
+    <div class="side-foot">
+      <div id="sideUser" class="muted small"></div>
+      <button class="btn ghost small" id="logoutBtn">로그아웃</button>
+      <div class="muted tiny" id="dataInfo"></div>
+    </div>
+  </nav>
+  <div id="backdrop" class="backdrop"></div>
+
+  <main id="main">
+    <!-- 랭킹 -->
+    <section id="view-rank" class="view">
+      <div class="toolbar">
+        <div class="chips" id="catChips"></div>
+        <input id="searchBox" class="search" placeholder="식당 이름 검색" type="search">
+      </div>
+      <ol id="rankList" class="rank-list"></ol>
+    </section>
+    <!-- 지도 -->
+    <section id="view-map" class="view map-view">
+      <div id="map"></div>
+      <div class="map-legend" id="mapLegend"></div>
+      <button class="btn float" id="recenterBtn">KRISS 주변으로</button>
+    </section>
+    <!-- 검색 -->
+    <section id="view-search" class="view">
+      <div class="toolbar">
+        <div class="chips" id="searchModes">
+          <button class="chip active" data-mode="place">식당</button>
+          <button class="chip" data-mode="group">소속</button>
+          <button class="chip" data-mode="person">이름</button>
+        </div>
+        <input id="searchInput" class="search" placeholder="식당 이름 검색" type="search" list="searchList" autocomplete="off">
+        <datalist id="searchList"></datalist>
+      </div>
+      <div id="searchMapBox" class="search-map hidden"><div id="searchMap"></div><div class="map-legend" id="searchLegend"></div></div>
+      <p class="muted pad" id="searchHint">검색어를 입력하세요.</p>
+      <ol id="searchResults" class="rank-list"></ol>
+    </section>
+    <!-- 즐겨찾기 -->
+    <section id="view-fav" class="view">
+      <p class="muted pad" id="favEmpty"></p>
+      <ol id="favList" class="rank-list"></ol>
+    </section>
+    <!-- 랜덤 -->
+    <section id="view-random" class="view">
+      <div class="random-wrap">
+        <p class="muted">대전 안에 있는 분류별 랭킹 상위 30곳 중 한 곳을 무작위로 골라 드립니다.</p>
+        <div class="chips big" id="randomCats"></div>
+        <div id="randomResult" class="random-result hidden"></div>
+        <button class="btn primary big hidden" id="randomAgain">다시 뽑기</button>
+      </div>
+    </section>
+    <!-- 관리자 -->
+    <section id="view-admin" class="view">
+      <div class="admin-wrap">
+        <h2>사이트 접속 비밀번호</h2>
+        <form id="gatePwForm" class="row">
+          <input id="newGatePw" type="text" placeholder="새 비밀번호" required minlength="4">
+          <button class="btn primary" type="submit">변경</button>
+        </form>
+        <p class="muted small" id="gatePwMsg"></p>
+        <div id="pendingWrap" class="hidden">
+          <h2>가입 승인 대기</h2>
+          <table class="table" id="pendingTable"><thead><tr><th>아이디</th><th>신청일</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+        <h2>회원 목록</h2>
+        <table class="table" id="userTable"><thead><tr><th>아이디</th><th>가입일</th><th>즐겨찾기</th><th>상태</th><th></th></tr></thead><tbody></tbody></table>
+        <p class="muted small">강제탈퇴 시 로그인이 차단되고 즐겨찾기가 삭제됩니다.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- 상세 패널 -->
+  <aside id="detail" class="detail hidden" aria-hidden="true">
+    <div class="detail-head">
+      <button class="icon-btn" id="detailClose" aria-label="닫기">✕</button>
+      <div class="detail-title">
+        <h2 id="dName"></h2>
+        <div class="muted small" id="dSub"></div>
+      </div>
+      <button class="heart" id="dHeart" aria-label="즐겨찾기">♥</button>
+    </div>
+    <div class="detail-body">
+      <div id="dMap" class="mini-map"></div>
+      <div class="links">
+        <a id="lkKakao" target="_blank" rel="noopener">카카오맵</a>
+        <a id="lkNaver" target="_blank" rel="noopener">네이버지도</a>
+        <a id="lkGoogle" target="_blank" rel="noopener">구글지도</a>
+      </div>
+      <div class="stat-row">
+        <div class="stat"><div class="num" id="dCount"></div><div class="lbl">방문 횟수</div></div>
+        <div class="stat"><div class="num" id="dGroups"></div><div class="lbl">방문 그룹</div></div>
+        <div class="stat"><div class="num" id="dLast"></div><div class="lbl">최근 방문</div></div>
+      </div>
+      <p class="locked-note hidden" id="dLocked"></p>
+      <div id="dPrivate">
+      <h3>가장 많이 방문한 그룹 <button class="link" id="moreGroups">상세보기</button></h3>
+      <ol class="bar-list" id="dTopGroups"></ol>
+      <h3>가장 많이 방문한 사람 <button class="link" id="morePeople">상세보기</button></h3>
+      <ol class="bar-list" id="dTopPeople"></ol>
+      </div>
+      <div id="dCafes"></div>
+      <div id="dMore" class="hidden">
+        <h3 id="dMoreTitle"></h3>
+        <table class="table" id="dMoreTable"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </aside>
+  <div id="toast" class="toast"></div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script id="kakaoSdk"></script>
+<script src="app.js"></script>
+</body>
+</html>
