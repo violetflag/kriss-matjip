@@ -3,8 +3,8 @@
 const C = window.APP_CONFIG;
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-const FOOD_CATS = ["전체", "한식", "양식", "중식", "일식", "기타"];
-const RANDOM_CATS = ["한식", "양식", "중식", "일식", "기타", "카페"];
+const FOOD_CATS = ["전체", "한식", "양식", "중식", "일식", "아시아음식", "패스트푸드", "기타"];
+const RANDOM_CATS = ["한식", "양식", "중식", "일식", "아시아음식", "패스트푸드", "기타", "카페"];
 
 const S = {            // 앱 상태
   data: null, places: [], byId: new Map(),
@@ -171,7 +171,7 @@ function go(view) {
   $$("#sidebar .menu button").forEach(b => b.classList.toggle("active", b.dataset.view === view));
   const target = view.startsWith("rank") ? "rank" : view.startsWith("map") ? "map" : view;
   $$("#main .view").forEach(v => v.classList.toggle("active", v.id === "view-" + target));
-  if (target === "rank") { S.cat = "전체"; S.q = ""; S.shown = 60; $("#searchBox").value = ""; renderChips(); renderRank(); }
+  if (target === "rank") { S.cat = "전체"; S.q = ""; S.shown = 60; $("#searchBox").value = ""; $("#searchBox").placeholder = view === "rank-cafe" ? "카페 이름 검색" : "식당 이름 검색"; renderChips(); renderRank(); }
   if (target === "map") { S.mapKind = view.endsWith("cafe") ? "cafe" : "food"; renderMap(); }
   if (view === "search") { setupSearchInput(); runSearch(); }
   if (view === "fav") renderFav();
@@ -195,7 +195,7 @@ function rankItem(p, rank, cnt, lbl) {
     <div class="rank-main"><div class="rank-name">${esc(p.name)}</div>
       <div class="rank-meta"><span class="tag">${esc(p.sub || p.cat)}</span>${esc(p.addr)} · KRISS ${fmtDist(p.dist)}</div></div>
     <div class="rank-count"><b>${n}</b>${sub}</div>
-    <button class="heart ${S.favs.has(p.id) ? "on" : ""}" data-fav="${p.id}" aria-label="즐겨찾기">♥</button></li>`;
+    <button class="heart ${S.favs.has(p.id) ? "on" : ""}" data-fav="${p.id}" aria-label="즐겨찾기"></button></li>`;
 }
 function renderRank() {
   const kind = S.view === "rank-cafe" ? "cafe" : "food";
@@ -327,7 +327,7 @@ function drawOn(map, list, cnt, legend) {
     const max = Math.max(1, ...[...buckets.values()].map(x => x.n));
     for (const bk of buckets.values()) {
       const size = Math.round(28 + 52 * Math.sqrt(bk.n / max)), ratio = bk.n / max;
-      const div = document.createElement("div"); div.className = `cluster ${ratio > .6 ? "hot" : ratio > .25 ? "warm" : ""}`;
+      const div = document.createElement("div"); div.className = `cluster ${ratio > .6 ? "hot" : ratio > .3 ? "warm" : ratio > .12 ? "cool" : ""}`;
       div.style.cssText = `width:${size}px;height:${size}px;font-size:${size > 50 ? 14 : 12}px`; div.textContent = bk.n;
       div.title = `${bk.c}곳 · ${bk.n}회 방문`;
       const pos = new kakao.maps.LatLng(bk.lat / bk.n, bk.lng / bk.n);
@@ -335,7 +335,7 @@ function drawOn(map, list, cnt, legend) {
       const ov = new kakao.maps.CustomOverlay({ position: pos, content: div, zIndex: bk.n });
       ov.setMap(map); out.push(ov);
     }
-    legend.innerHTML = `원의 숫자 = 방문 횟수 합 · <span style="color:#e5484d">■</span> 많음 <span style="color:#f5a623">■</span> 보통 <span style="color:#1f6fc5">■</span> 적음 · 확대하면 식당 이름이 보입니다`;
+    legend.innerHTML = `원의 숫자 = 방문 횟수 합 · <span style="color:#ff8a8a">●</span> 많음 <span style="color:#ffc47a">●</span> 보통 <span style="color:#9ecbf5">●</span> 적음 <span style="color:#c9ccd3">●</span> 드묾 · 확대하면 이름이 보입니다`;
   }
   return out;
 }
