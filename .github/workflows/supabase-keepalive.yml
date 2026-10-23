@@ -1,0 +1,31 @@
+# Supabase 무료 플랜은 7일간 요청이 없으면 프로젝트를 일시정지한다.
+# 3일마다 가벼운 조회를 한 번 보내 정지를 막는다.
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: "0 0 */3 * *"   # 3일마다 09:00 KST (00:00 UTC)
+  workflow_dispatch:          # Actions 탭에서 수동 실행
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_ANON_KEY 저장소 Secret이 없습니다."
+            exit 1
+          fi
+          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/settings?select=key&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "HTTP $status"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Supabase 응답 오류 (HTTP $status)"
+            exit 1
+          fi
