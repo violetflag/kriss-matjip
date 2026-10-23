@@ -10,6 +10,9 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write   # 아래 self-enable 단계용
     steps:
       - uses: actions/checkout@v4
 
@@ -31,3 +34,10 @@ jobs:
             echo "::error::Supabase 응답 오류 (HTTP $status)"
             exit 1
           fi
+
+      # GitHub은 저장소에 60일간 활동이 없으면 예약 워크플로를 끈다.
+      # 실행할 때마다 자기 자신을 enable 해서 그 카운터를 초기화한다.
+      - name: Keep this workflow enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/supabase-keepalive.yml/enable"
