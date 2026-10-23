@@ -1,0 +1,33 @@
+# Supabase 무료 플랜은 7일간 요청이 없으면 프로젝트를 일시정지한다.
+# 3일마다 가벼운 조회를 한 번 보내 정지를 막는다.
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: "0 0 */3 * *"   # 3일마다 09:00 KST (00:00 UTC)
+  workflow_dispatch:          # Actions 탭에서 수동 실행
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # URL과 anon 키는 이미 공개된 config.js에서 읽는다 (별도 Secret 불필요)
+      - name: Ping Supabase
+        run: |
+          SUPABASE_URL=$(grep -o 'SUPABASE_URL: *"[^"]*"' config.js | sed 's/.*"\(.*\)"/\1/')
+          SUPABASE_ANON_KEY=$(grep -o 'SUPABASE_ANON: *"[^"]*"' config.js | sed 's/.*"\(.*\)"/\1/')
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::config.js에서 SUPABASE_URL / SUPABASE_ANON 값을 찾지 못했습니다."
+            exit 1
+          fi
+          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/settings?select=key&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "HTTP $status"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Supabase 응답 오류 (HTTP $status)"
+            exit 1
+          fi
