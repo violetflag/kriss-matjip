@@ -25,10 +25,12 @@ jobs:
             echo "::error::config.js에서 SUPABASE_URL / SUPABASE_ANON 값을 찾지 못했습니다."
             exit 1
           fi
-          status=$(curl -sS -o /dev/null -w "%{http_code}" \
-            "$SUPABASE_URL/rest/v1/settings?select=key&limit=1" \
+          # 접속 비밀번호 확인 함수를 빈 값으로 호출한다 (항상 false, DB를 깨우는 용도)
+          status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+            "$SUPABASE_URL/rest/v1/rpc/check_gate" \
             -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" -d '{"pw":""}')
           echo "HTTP $status"
           if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
             echo "::error::Supabase 응답 오류 (HTTP $status)"
