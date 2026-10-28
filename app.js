@@ -30,7 +30,7 @@ const hav = (a, b) => { const R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.
 const countBy = (arr) => { const m = new Map(); for (const k of arr) m.set(k, (m.get(k) || 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1]); };
 const ymKey = (d) => d.slice(2, 4) + d.slice(5, 7);           // "2025-03-14" → "2503"
 const isLocal = (p) => /^(대전|세종)/.test(p.addr);
-const norm = (s) => String(s || "").normalize("NFKC").replace(/\(주\)|주식회사|유한회사|㈜/g, "").replace(/[\s\W_]/g, "").toLowerCase();
+const norm = (s) => String(s || "").normalize("NFKC").replace(/\(주\)|주식회사|유한회사|㈜/g, "").replace(/[^\p{L}\p{N}]/gu, "").toLowerCase();   // 한글 유지
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
 const asButton = (el, fn) => { el.tabIndex = 0; el.setAttribute("role", "button"); el.onclick = fn;
@@ -724,35 +724,62 @@ async function geoScan() {
   if (!S.kakaoReady || !kakao.maps.services) { toast("카카오맵이 아직 준비되지 않았습니다."); return; }
   const fixed = new Set(S.fixes.map(f => f.place_id));
   const targets = S.data.places.filter(p => !p.hidden && !fixed.has(p.id) && p.dist > 30000).sort((a, b) => b.n - a.n);
-  const ps = new kakao.maps.services.Places(), loc = new kakao.maps.LatLng(...S.data.meta.kriss);
-  const search = (q) => new Promise(r => ps.keywordSearch(q, (d, s) => r(s === kakao.maps.services.Status.OK ? d : []), { location: loc, radius: 20000 }));
   const btn = $("#geoScan"), msg = $("#geoMsg"), found = []; btn.disabled = true;
   for (let i = 0; i < targets.length; i++) {
-    const p = targets[i]; msg.textContent = ` ${i + 1} / ${targets.length} 확인 중…`;
-    for (const o of p.orig) {
-      const q = o.normalize("NFKC").replace(/\(주\)|주식회사|유한회사|㈜/g, "").replace(/[()（）]/g, " ").trim();
-      const no = norm(o.replace(/\(.*?\)|（.*?）/g, "")); if (no.length < 2) continue;
-      const hit = (await search(q)).find(x => (x.category_group_code === "FD6" || x.category_group_code === "CE7") && (norm(x.place_name).includes(no) || no.includes(norm(x.place_name))));
-      if (hit) { found.push({ p, o, hit }); break; }
-      await new Promise(r => setTimeout(r, 80));
+    const p = targets[i]; msg.textContent = ` ${i + 1} / ${targets.length} 확인 중… (후보 ${found.length})`;
+    const r = await geoFind(p.orig); if (r) found.push({ p, ...r });
+  }
+  btn.disabled = false;
+  found.sort((a, b) => b.strong - a.strong || b.p.n - a.p.n);
+  msg.textContent = ` 이름 일치 ${found.filter(f => f.strong).length}곳 · 확인 필요 ${found.filter(f => !f.strong).length}곳`;
+  S.geoFound = found; renderGeo();
+}
+// 회의비 상호로 KRISS 20km 안 음식점·카페를 찾는다. 이름이 겹치면 strong
+async function geoFind(origs, extra) {
+  const ps = new kakao.maps.services.Places(), loc = new kakao.maps.LatLng(...S.data.meta.kriss);
+  const search = (q) => new Promise(r => ps.keywordSearch(q, (d, st) => r(st === kakao.maps.services.Status.OK ? d : []), { location: loc, radius: 20000 }));
+  const food = (x) => x.category_group_code === "FD6" || x.category_group_code === "CE7";
+  let weak = null;
+  for (const o of [...(extra ? [extra] : []), ...origs]) {
+    const clean = o.normalize("NFKC").replace(/\(주\)|주식회사|유한회사|㈜/g, " ").trim();
+    const base = clean.replace(/\(.*?\)|（.*?）/g, " ").replace(/\s+/g, " ").trim(), no = norm(base);
+    if (no.length < 2) continue;
+    for (const q of [...new Set([clean.replace(/[()（）]/g, " ").replace(/\s+/g, " ").trim(), "대전 " + base])]) {
+      const res = (await search(q)).filter(food);
+      const hit = res.find(x => { const nx = norm(x.place_name); return nx.includes(no) || no.includes(nx); });
+      if (hit) return { o, hit, strong: true };
+      if (!weak && res[0]) weak = { o, hit: res[0], strong: false };
+      await new Promise(r => setTimeout(r, 60));
     }
   }
-  btn.disabled = false; msg.textContent = ` 후보 ${found.length}곳`;
+  return weak;
+}
+function renderGeo() {
+  const found = S.geoFound || [];
   $("#geoTable thead").innerHTML = found.length ? `<tr><th>회의비 상호 (방문)</th><th>지금 연결된 업체</th><th>대전 근처 후보</th><th></th></tr>` : "";
-  $("#geoTable tbody").innerHTML = found.map((f, i) => `<tr><td><b>${esc(f.o)}</b> (${f.p.n}회)</td><td>${esc(f.p.name)}<br><span class="muted">${esc(f.p.addr)}</span></td>
-    <td>${esc(f.hit.place_name)}<br><span class="muted">${esc(f.hit.road_address_name || f.hit.address_name)} · ${fmtDist(+f.hit.distance)}</span></td>
-    <td><button class="btn small primary" data-geo="${i}">적용</button></td></tr>`).join("") +
-    (found.length ? `<tr><td colspan="4"><button class="btn small" id="geoAll">모두 적용</button></td></tr>` : "");
+  $("#geoTable tbody").innerHTML = found.map((f, i) => { const a = f.hit.road_address_name || f.hit.address_name;
+    return `<tr><td><b>${esc(f.o)}</b> (${f.p.n}회)</td><td>${esc(f.p.name)}<br><span class="muted">${esc(f.p.addr)}</span></td>
+    <td>${f.strong ? "" : `<span class="tag">확인 필요</span>`}${esc(f.hit.place_name)}<br><span class="muted">${esc(a)} · KRISS ${fmtDist(+f.hit.distance)}</span><br>
+      <a href="https://map.naver.com/p/search/${encodeURIComponent(f.hit.place_name + " " + a)}" target="_blank" rel="noopener">네이버지도</a> ·
+      <a href="https://www.google.com/search?q=${encodeURIComponent(f.o + " 대전")}" target="_blank" rel="noopener">구글</a>
+      <form class="row geo-q" data-q="${i}"><input placeholder="다른 이름으로 검색" aria-label="다른 이름으로 검색"><button class="btn small" type="submit">검색</button></form></td>
+    <td>${f.done ? "적용됨" : `<button class="btn small primary" data-geo="${i}">적용</button>`}</td></tr>`; }).join("") +
+    (found.some(f => f.strong && !f.done) ? `<tr><td colspan="4"><button class="btn small" id="geoAll">이름 일치 모두 적용</button></td></tr>` : "");
   const apply = async (f) => {
     const addr = f.hit.road_address_name || f.hit.address_name, k = kakaoCat(f.hit.category_name, f.hit.category_group_code);
     const same = S.data.places.find(x => x !== f.p && !x.hidden && norm(x.name) === norm(f.hit.place_name) && x.addr === addr);
     const row = { place_id: f.p.id, name: f.hit.place_name, addr, lat: +f.hit.y, lng: +f.hit.x, cat: k.cat, sub: k.sub, merge_into: same ? same.id : null, note: f.o };
     const { error } = await S.sb.from("place_fixes").upsert(row);
     if (error) { toast("저장하지 못했습니다: " + error.message); return false; }
-    return true;
+    f.done = true; return true;
   };
-  $$("[data-geo]").forEach(b => b.onclick = async () => { b.disabled = true; if (await apply(found[+b.dataset.geo])) { b.textContent = "적용됨"; toast("적용했습니다. 새로고침하면 반영됩니다."); } else b.disabled = false; });
-  const all = $("#geoAll"); if (all) all.onclick = async () => { all.disabled = true; let n = 0; for (const f of found) if (await apply(f)) n++; toast(`${n}곳을 적용했습니다. 새로고침하면 반영됩니다.`); };
+  $$("[data-geo]").forEach(b => b.onclick = async () => { b.disabled = true; if (await apply(found[+b.dataset.geo])) { toast("적용했습니다. 새로고침하면 반영됩니다."); renderGeo(); } else b.disabled = false; });
+  $$(".geo-q").forEach(fm => fm.onsubmit = async (e) => {
+    e.preventDefault(); const f = found[+fm.dataset.q], q = fm.querySelector("input").value.trim(); if (!q) return;
+    const r = await geoFind([], q); if (!r) { toast("대전 근처에서 찾지 못했습니다."); return; }
+    Object.assign(f, { hit: r.hit, strong: r.strong, done: false }); renderGeo();
+  });
+  const all = $("#geoAll"); if (all) all.onclick = async () => { all.disabled = true; let n = 0; for (const f of found) if (f.strong && !f.done && await apply(f)) n++; toast(`${n}곳을 적용했습니다. 새로고침하면 반영됩니다.`); renderGeo(); };
 }
 function renderFixes() {
   const tb = $("#fixTable tbody");
