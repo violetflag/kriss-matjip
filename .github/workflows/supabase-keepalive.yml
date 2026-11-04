@@ -1,10 +1,11 @@
 # Supabase 무료 플랜은 7일간 요청이 없으면 프로젝트를 일시정지한다.
-# 3일마다 가벼운 조회를 한 번 보내 정지를 막는다.
+# 3일에 한 번 요청 1건으로는 "활동 부족"으로 판정돼 경고 메일이 왔다 (2026-11-04).
+# 그래서 하루 2번, DB 조회·RPC·인증 서버 확인을 함께 보낸다.
 name: Supabase keep-alive
 
 on:
   schedule:
-    - cron: "0 0 */3 * *"   # 3일마다 09:00 KST (00:00 UTC)
+    - cron: "17 1,13 * * *"   # 매일 10:17, 22:17 KST (정각은 GitHub 지연이 커서 피함)
   workflow_dispatch:          # Actions 탭에서 수동 실행
 
 jobs:
@@ -25,15 +26,24 @@ jobs:
             echo "::error::config.js에서 SUPABASE_URL / SUPABASE_ANON 값을 찾지 못했습니다."
             exit 1
           fi
-          # 접속 비밀번호 확인 함수를 빈 값으로 호출한다 (항상 false, DB를 깨우는 용도)
-          status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
-            "$SUPABASE_URL/rest/v1/rpc/check_gate" \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-            -H "Content-Type: application/json" -d '{"pw":""}')
-          echo "HTTP $status"
-          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
-            echo "::error::Supabase 응답 오류 (HTTP $status)"
+          fail=0
+          ping() {  # $1=설명, 나머지=curl 인자
+            name="$1"; shift
+            code=$(curl -sS -m 30 -o /dev/null -w "%{http_code}" \
+              -H "apikey: $SUPABASE_ANON_KEY" \
+              -H "Authorization: Bearer $SUPABASE_ANON_KEY" "$@") || code=000
+            echo "$name: HTTP $code"
+            if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then fail=1; fi
+          }
+          # 1) 테이블 조회 (PostgREST → Postgres)
+          ping "place_fixes 조회" "$SUPABASE_URL/rest/v1/place_fixes?select=place_id&limit=1"
+          # 2) 접속 비밀번호 확인 함수를 빈 값으로 호출 (항상 false)
+          ping "check_gate RPC" -X POST "$SUPABASE_URL/rest/v1/rpc/check_gate" \
+            -H "Content-Type: application/json" -d '{"pw":""}'
+          # 3) 인증 서버 상태 확인
+          ping "auth health" "$SUPABASE_URL/auth/v1/health"
+          if [ "$fail" -ne 0 ]; then
+            echo "::error::Supabase 요청 중 실패가 있습니다."
             exit 1
           fi
 
