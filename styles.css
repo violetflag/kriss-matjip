@@ -261,3 +261,4 @@ label input:focus{outline:0;border-color:var(--ink);background:var(--surface);bo
 .menu .badge{margin-left:auto;background:var(--accent);color:#fff;border-radius:999px;font-size:11.5px;font-weight:700;min-width:20px;padding:1px 7px;text-align:center}
 #statsGroups li{cursor:pointer;border-radius:8px}
 #statsGroups li:hover span,#statsGroups li:focus-visible span{color:var(--accent)}
+@media (max-width:719px){#filterBar{display:none!important}}   /* 휴대폰에선 기간·정렬·지역·엑셀 줄 숨김 (app.js MOBILE) */

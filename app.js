@@ -32,6 +32,7 @@ const ymKey = (d) => d.slice(2, 4) + d.slice(5, 7);           // "2025-03-14" �
 const partialYm = () => {               // 자료가 달 중간에 끝나면 그 달("2610")
   const t = S.data.meta.to, end = new Date(+t.slice(0, 4), +t.slice(5, 7), 0).getDate();
   return +t.slice(8, 10) < end ? ymKey(t) : ""; };
+const MOBILE = matchMedia("(max-width:719px)").matches;   // styles.css와 같은 기준
 const isLocal = (p) => /^(대전|세종)/.test(p.addr);
 const norm = (s) => String(s || "").normalize("NFKC").replace(/\(주\)|주식회사|유한회사|㈜/g, "").replace(/[^\p{L}\p{N}]/gu, "").toLowerCase();   // 한글 유지
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -54,6 +55,7 @@ async function init() {
   await applyFixes();
   S.local = store.get("local", true); S.sort = store.get("sort", "n");
   const per = store.get("period", "all"); S.period = per.p || "all"; S.month = per.m || "";
+  if (MOBILE) { S.period = "all"; S.month = ""; S.sort = "n"; S.local = true; }   // 휴대폰은 필터 줄을 숨기므로 기본값으로
   recount();
   $("#dataInfo").textContent = `데이터 ${S.data.meta.from} ~ ${S.data.meta.to} · 업체 ${S.places.length.toLocaleString()} · 방문 ${S.data.meta.visits.toLocaleString()}건`;
   bindGate(); bindAuth(); bindApp(); bindFilters();
