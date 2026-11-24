@@ -14,7 +14,7 @@ const S = {            // 앱 상태
   period: "all", month: "", local: true, sort: "n", cnt: new Map(), inP: () => true,
   map: null, overlays: [], mapKind: "food", miniMap: null, miniMarker: null,
   smap: null, soverlays: [], searchMode: "place", searchQ: "", searchList: [], searchCount: null, searchKind: "food", searchRows: null, searchSeq: 0,
-  names: { group: [], person: [] }, pv: new Map(),
+  names: { group: [], person: [] }, groupN: [], pv: new Map(),
   detail: null, lastFocus: null, lastRandom: null, randomCat: null, kakaoReady: false, moreKind: null,
 };
 
@@ -29,6 +29,9 @@ const hav = (a, b) => { const R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2; return Math.round(2 * R * Math.asin(Math.sqrt(h))); };
 const countBy = (arr) => { const m = new Map(); for (const k of arr) m.set(k, (m.get(k) || 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1]); };
 const ymKey = (d) => d.slice(2, 4) + d.slice(5, 7);           // "2025-03-14" → "2503"
+const partialYm = () => {               // 자료가 달 중간에 끝나면 그 달("2610")
+  const t = S.data.meta.to, end = new Date(+t.slice(0, 4), +t.slice(5, 7), 0).getDate();
+  return +t.slice(8, 10) < end ? ymKey(t) : ""; };
 const isLocal = (p) => /^(대전|세종)/.test(p.addr);
 const norm = (s) => String(s || "").normalize("NFKC").replace(/\(주\)|주식회사|유한회사|㈜/g, "").replace(/[^\p{L}\p{N}]/gu, "").toLowerCase();   // 한글 유지
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -122,7 +125,7 @@ function placeFilters(view) {
   bar.classList.toggle("hidden", !slot);
   if (slot) slot.appendChild(bar);
   bar.classList.toggle("no-sort", !(target === "rank" || (view === "search")));
-  bar.classList.toggle("no-export", !(target === "rank" || view === "search"));
+  bar.classList.toggle("no-export", !(target === "rank" || view === "search" || view === "stats"));
   bar.classList.toggle("no-local", view === "random" || target === "map");
 }
 function refreshView() {
@@ -207,7 +210,7 @@ async function onLogin(user) {
 }
 async function logout() {
   try { await S.sb.auth.signOut(); } catch (e) {}
-  S.user = null; S.profile = null; S.favs = new Set(); S.pv = new Map(); S.names = { group: [], person: [] };
+  S.user = null; S.profile = null; S.favs = new Set(); S.pv = new Map(); S.names = { group: [], person: [] }; S.groupN = [];
   closeDetail(); $("#app").classList.add("hidden"); $("#auth").classList.remove("hidden");
 }
 
@@ -217,8 +220,10 @@ async function loadNames() {
     const { data, error } = await S.sb.rpc("visit_names", { kind });
     if (error) { toast("방문 기록을 불러오지 못했습니다."); return; }
     S.names[kind] = (data || []).map(r => r.name);
+    if (kind === "group") S.groupN = (data || []).map(r => [r.name, r.n]);
   }
   if (S.view === "search") setupSearchInput();
+  if (S.view === "stats") renderStats();
 }
 async function placeVisits(p) {
   if (S.pv.has(p.id)) return S.pv.get(p.id);
@@ -240,6 +245,7 @@ function showApp() {
   $("#sideUser").textContent = !S.profile ? "로그인하지 않음 · 식당별 방문 횟수만 표시" : canSee() ? `${name} 님` : `${name} 님 · 관리자 승인 대기 중`;
   $("#logoutBtn").textContent = S.profile ? "로그아웃" : "로그인";
   $$(".admin-only").forEach(el => el.classList.toggle("hidden", !isAdmin()));
+  pendingBadge();
   loadKakao(() => { S.kakaoReady = true; if (S.view.startsWith("map")) renderMap(); if (S.view === "search") renderSearchMap(); if (S.detail) renderMiniMap(S.detail); });
   S.view = ""; route();
 }
@@ -360,6 +366,13 @@ function exportCurrent() {
     if (!S.searchList.length) { toast("내보낼 검색 결과가 없습니다."); return; }
     const c = S.searchCount ? (p) => S.searchCount.get(p.id) || 0 : cnt;
     downloadCsv(`검색_${S.searchQ}_${S.searchKind === "cafe" ? "카페" : "식당"}`, head, S.searchList.map((p, i) => row(p, i, c(p))));
+  } else if (S.view === "stats") {          // 월별 × 분류 방문 횟수
+    const by = new Map(), part = partialYm();
+    for (const p of S.places) if (regionOk(p)) for (const [k, v] of Object.entries(p.m)) if (S.inP(k)) {
+      const r = by.get(k) || {}; r[p.cat] = (r[p.cat] || 0) + v; by.set(k, r); }
+    const rows = [...by.keys()].sort().map(k => { const r = by.get(k);
+      return [`20${k.slice(0, 2)}-${k.slice(2)}${k === part ? ` (${+S.data.meta.to.slice(8, 10)}일까지)` : ""}`, ALL_CATS.reduce((s, c) => s + (r[c] || 0), 0), ...ALL_CATS.map(c => r[c] || 0)]; });
+    downloadCsv(`월별통계_${S.local ? "대전세종" : "전체지역"}`, ["연월", "방문 합계", ...ALL_CATS], rows);
   }
 }
 
@@ -402,14 +415,19 @@ function monthRows(mm) {                  // 선택 기간에 맞는 월별 막�
   if (/^\d{4}$/.test(S.period)) { const Y = S.period.slice(2); keys = Array.from({ length: 12 }, (_, i) => Y + String(i + 1).padStart(2, "0")); }
   else { const to = S.data.meta.to; let y = +to.slice(0, 4), m = +to.slice(5, 7); keys = [];
     for (let i = 0; i < 12; i++) { keys.unshift(String(y).slice(2) + String(m).padStart(2, "0")); if (--m === 0) { m = 12; y--; } } }
-  return keys.map(k => [`${+k.slice(2)}월`, mm[k] || 0, k]);
+  const part = partialYm();
+  return keys.map(k => [`${+k.slice(2)}월${k === part ? "*" : ""}`, mm[k] || 0, k]);
 }
 function yearRows(mm) {
   const y0 = +S.data.meta.from.slice(0, 4), y1 = +S.data.meta.to.slice(0, 4), out = [];
   for (let y = y0; y <= y1; y++) { const Y = String(y).slice(2); let s = 0; for (const k in mm) if (k.startsWith(Y)) s += mm[k]; out.push([`${String(y).slice(2)}년`, s, String(y)]); }
   return out;
 }
-const monthTitle = () => /^\d{4}$/.test(S.period) ? `${S.period}년 월별 방문` : `최근 12개월 월별 방문 (${S.data.meta.to.slice(0, 7)}까지)`;
+function monthTitle() {
+  const t = S.data.meta.to, year = /^\d{4}$/.test(S.period);
+  const note = partialYm() && (!year || S.period === t.slice(0, 4)) ? ` · *${+t.slice(5, 7)}월은 ${+t.slice(8, 10)}일까지 자료` : "";
+  return (year ? `${S.period}년 월별 방문` : `최근 12개월 월별 방문 (${t.slice(0, 7)}까지)`) + note;
+}
 function bindYearClicks(el) {
   $$("[data-k]", el).forEach(b => b.onclick = () => {
     const k = b.dataset.k;
@@ -435,7 +453,9 @@ function renderStats() {
     <section class="card"><h3>분류별 비율</h3><ol class="bar-list">${byCat.map(([c, n]) => `<li><span>${c}</span><b>${n}회 · ${Math.round(n / total * 100)}%</b><div class="bar"><i style="width:${Math.round(n / byCat[0][1] * 100)}%"></i></div></li>`).join("") || `<li class="muted">기록 없음</li>`}</ol></section>
     <section class="card"><h3>맛집 TOP 10</h3><ol class="rank-list compact" id="statsTopFood">${top("food", 10).map((p, i) => rankItem(p, i + 1)).join("")}</ol></section>
     <section class="card"><h3>카페 TOP 5</h3><ol class="rank-list compact" id="statsTopCafe">${top("cafe", 5).map((p, i) => rankItem(p, i + 1)).join("")}</ol></section>
-    ${canSee() ? `<p class="muted small pad">소속·사람별 통계는 <a href="#search">검색</a>에서 소속이나 이름을 고르면 볼 수 있습니다.</p>` : ""}`;
+    ${canSee() && S.groupN.length ? `<section class="card"><h3>소속별 방문 TOP 10 <small class="muted">전체 기간·전체 지역 · 누르면 그 소속이 간 식당이 나옵니다</small></h3><ol class="bar-list" id="statsGroups">${S.groupN.slice(0, 10).map(([g, n]) => `<li data-grp="${esc(g)}"><span>${esc(g)}</span><b>${n}회</b><div class="bar"><i style="width:${Math.round(n / S.groupN[0][1] * 100)}%"></i></div></li>`).join("")}</ol></section>` : ""}
+    ${canSee() ? `<p class="muted small pad">소속·사람별 연도·월별 통계는 <a href="#search">검색</a>에서 소속이나 이름을 고르면 볼 수 있습니다.</p>` : ""}`;
+  $$("[data-grp]", el).forEach(li => asButton(li, () => { S.searchMode = "group"; S.searchQ = li.dataset.grp; S.searchKind = "food"; S.searchRows = null; go("search"); }));
   bindYearClicks(el); bindList($("#statsTopFood")); bindList($("#statsTopCafe"));
 }
 
@@ -680,6 +700,14 @@ function pickRandom(cat) {
 }
 
 /* ---------- 관리자 ---------- */
+async function pendingBadge(users) {       // 메뉴에 가입 승인 대기 인원 표시
+  const btn = $('#sidebar [data-view="admin"]'), old = $(".badge", btn);
+  if (old) old.outerHTML = "";
+  if (!isAdmin()) return;
+  if (!users) { const { data } = await S.sb.from("profiles").select("*"); users = data || []; }
+  const n = users.filter(u => !u.approved && !u.banned && !u.rejected && u.username !== C.ADMIN_ID).length;
+  if (n) btn.insertAdjacentHTML("beforeend", `<span class="badge" aria-label="가입 승인 대기 ${n}명">${n}</span>`);
+}
 async function renderAdmin() {
   if (!isAdmin()) { go("rank-food"); return; }
   renderFixes();
@@ -689,7 +717,7 @@ async function renderAdmin() {
   const { data: favs } = await S.sb.from("favorites").select("user_id");
   const fc = new Map(); (favs || []).forEach(f => fc.set(f.user_id, (fc.get(f.user_id) || 0) + 1));
   const isAdm = (u) => u.username === C.ADMIN_ID, day = (u) => (u.created_at || "").slice(0, 10);
-  const pending = users.filter(u => !u.approved && !u.banned && !u.rejected && !isAdm(u));
+  const pending = users.filter(u => !u.approved && !u.banned && !u.rejected && !isAdm(u)); pendingBadge(users);
   const rejected = users.filter(u => u.rejected && !isAdm(u));
   $("#pendingWrap").classList.toggle("hidden", !pending.length);
   $("#pendingTable tbody").innerHTML = pending.map(u => `<tr><td><b>${esc(u.username)}</b></td><td>${day(u)}</td>
